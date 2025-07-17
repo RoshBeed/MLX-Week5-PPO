@@ -54,6 +54,8 @@ This project implements a complete PPO training pipeline for language models, fe
 
 ### System Overview
 
+
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                        PPO Training Pipeline                    │
@@ -271,11 +273,12 @@ class ModelConfig:
     layer_norm_eps: float = 1e-5
 ```
 
-## 📚 API Reference
+## �� API Reference
 
-### PPOTrainer
+### Core Components
 
-Main training orchestrator for PPO fine-tuning.
+#### PPOTrainer
+The main orchestrator that coordinates the entire PPO training process.
 
 ```python
 class PPOTrainer:
@@ -295,9 +298,15 @@ class PPOTrainer:
         """Load a trained model."""
 ```
 
-### Key Components
+**Key Responsibilities:**
+- Orchestrates the complete PPO training loop
+- Manages data flow between all components
+- Handles logging, checkpointing, and evaluation
+- Coordinates policy and value function updates
 
 #### Policy Model
+The model being trained to generate high-quality text sequences.
+
 ```python
 class PolicyModel:
     def forward(self, input_ids, attention_mask=None) -> ModelOutput:
@@ -307,21 +316,256 @@ class PolicyModel:
         """Generate text using current policy."""
 ```
 
+**Key Responsibilities:**
+- Generates text sequences token-by-token
+- Computes action probabilities for each token
+- Provides log probabilities for PPO training
+- Handles sampling strategies (temperature, top-k, top-p)
+
 #### Value Model
+Predicts the expected future reward for a given state.
+
 ```python
 class ValueModel:
     def forward(self, input_ids, attention_mask=None) -> torch.Tensor:
         """Predict value for given state."""
 ```
 
+**Key Responsibilities:**
+- Estimates V(s) for each state in the sequence
+- Provides baseline for advantage computation
+- Trained to minimize MSE with reward-to-go targets
+- Helps stabilize PPO training
+
 #### Reward Model
+Evaluates the quality of generated text sequences.
+
 ```python
 class RewardModel:
     def forward(self, input_ids, attention_mask=None) -> torch.Tensor:
         """Compute reward for given text."""
 ```
 
+**Key Responsibilities:**
+- Scores complete text sequences
+- Provides reward signals for training
+- Can incorporate human feedback or automated metrics
+- Supports both learned and rule-based reward functions
 
+### Training Components
+
+#### Token Attribution
+Extracts state-action pairs and computes log probabilities.
+
+```python
+class TokenAttributor:
+    def extract_pairs(self, text: str, logprobs: List[float]) -> List[Dict]:
+        """Extract state-action pairs from generated text."""
+        
+    def compute_kl_divergence(self, policy_logprobs: List[float], 
+                             ref_logprobs: List[float]) -> List[float]:
+        """Compute KL divergence between policy and reference."""
+```
+
+**Key Responsibilities:**
+- Breaks down sequences into (state, action) pairs
+- Computes policy and reference log probabilities
+- Calculates KL divergence for each token
+- Prepares data for advantage computation
+
+#### Advantage Computation
+Computes advantages using GAE and TD errors.
+
+```python
+class AdvantageComputer:
+    def compute_td_errors(self, rewards: List[float], 
+                         values: List[float], gamma: float = 0.99) -> List[float]:
+        """Compute temporal difference errors."""
+        
+    def compute_gae_advantages(self, td_errors: List[float], 
+                              gamma: float = 0.99, lam: float = 0.95) -> List[float]:
+        """Compute Generalized Advantage Estimation."""
+```
+
+**Key Responsibilities:**
+- Computes TD errors: δ_t = r_t + γV(s_{t+1}) - V(s_t)
+- Calculates GAE advantages: A_t = Σ(γλ)^i δ_{t+i}
+- Determines reward-to-go targets: G_t = A_t + V(s_t)
+- Balances bias and variance in advantage estimation
+
+#### Experience Buffer
+Manages training data and batch processing.
+
+```python
+class ExperienceBuffer:
+    def store(self, sa_pairs: List[Dict], advantages: List[float], 
+              returns: List[float]) -> None:
+        """Store experience data."""
+        
+    def sample_batch(self, batch_size: int) -> Dict:
+        """Sample batch of training data."""
+        
+    def clear(self) -> None:
+        """Clear buffer contents."""
+```
+
+**Key Responsibilities:**
+- Stores state-action pairs, advantages, and returns
+- Implements efficient batch sampling strategies
+- Manages memory usage and buffer overflow
+- Provides data for model training
+
+### Loss Components
+
+#### Policy Loss (PPO-Clip)
+Implements the PPO-clip loss for stable policy updates.
+
+```python
+class PolicyLoss:
+    def compute_loss(self, new_logprobs: torch.Tensor, 
+                    old_logprobs: torch.Tensor, 
+                    advantages: torch.Tensor, 
+                    clip_epsilon: float = 0.2) -> torch.Tensor:
+        """Compute PPO-clip loss."""
+```
+
+**Key Responsibilities:**
+- Computes policy ratio: r_t(θ) = π_θ(a_t|s_t) / π_θ_old(a_t|s_t)
+- Applies PPO-clip: L = min(r_t × A_t, clip(r_t, 1±ε) × A_t)
+- Prevents large policy updates
+- Ensures stable training
+
+#### Value Loss
+MSE loss for value function training.
+
+```python
+class ValueLoss:
+    def compute_loss(self, predicted_values: torch.Tensor, 
+                    target_values: torch.Tensor) -> torch.Tensor:
+        """Compute MSE loss for value function."""
+```
+
+**Key Responsibilities:**
+- Minimizes MSE between predicted and target values
+- Uses reward-to-go as targets: V_target(s_t) = A_t + V_θ_old(s_t)
+- Helps value function converge to true state values
+- Stabilizes advantage computation
+
+### Configuration
+
+#### PPOConfig
+Central configuration for all PPO hyperparameters.
+
+```python
+@dataclass
+class PPOConfig:
+    # Model settings
+    model_name: str = "Qwen/Qwen3-0.6B-Base"
+    max_new_tokens: int = 50
+    
+    # Training hyperparameters
+    batch_size: int = 4
+    learning_rate: float = 1e-5
+    kl_coef: float = 0.1
+    gamma: float = 0.99
+    lam: float = 0.95
+    clip_epsilon: float = 0.2
+    
+    # LoRA settings
+    lora_r: int = 16
+    lora_alpha: int = 32
+    lora_dropout: float = 0.1
+```
+
+**Key Parameters:**
+- **model_name**: Base model for fine-tuning
+- **learning_rate**: Policy and value function learning rates
+- **kl_coef**: KL divergence penalty coefficient
+- **gamma**: Discount factor for future rewards
+- **lam**: GAE parameter for advantage estimation
+- **clip_epsilon**: PPO-clip parameter for stable updates
+
+### Data Structures
+
+#### State-Action Pair
+Represents a single training example.
+
+```python
+@dataclass
+class SAPair:
+    state_text: str                    # Current state (prompt + previous tokens)
+    action_token: str                  # Generated token
+    action_token_id: int               # Token ID
+    logprob: float                     # Policy log probability
+    ref_logprob: float                 # Reference model log probability
+    kl_div: float                      # KL divergence
+    value: float                       # Value prediction
+    advantage: float                   # GAE advantage
+    reward_to_go: float                # Reward-to-go target
+    prompt_idx: int                    # Original prompt index
+    step: int                          # Generation step
+```
+
+### Usage Examples
+
+#### Basic Training Loop
+```python
+from ppo_trainer.ppo_trainer import PPOTrainer
+from config.ppo_config import PPOConfig
+
+# Initialize configuration
+config = PPOConfig(
+    model_name="Qwen/Qwen3-0.6B-Base",
+    max_new_tokens=50,
+    batch_size=4,
+    learning_rate=1e-5,
+    kl_coef=0.1
+)
+
+# Create trainer
+trainer = PPOTrainer(config)
+
+# Training data
+prompts = [
+    "SUBREDDIT: r/relationships\nTITLE: Should I admit to snooping?\nPOST: ...\nTL;DR:",
+    "SUBREDDIT: r/advice\nTITLE: Need help with decision\nPOST: ...\nTL;DR:"
+]
+
+# Train the model
+results = trainer.train(prompts, num_epochs=10)
+print(f"Final reward: {results['avg_reward']:.4f}")
+```
+
+#### Custom Reward Model
+```python
+class CustomRewardModel(RewardModel):
+    def forward(self, input_ids, attention_mask=None):
+        # Custom reward computation
+        base_reward = super().forward(input_ids, attention_mask)
+        
+        # Add custom penalties/rewards
+        text = self.tokenizer.decode(input_ids[0])
+        length_penalty = -0.1 * len(text.split())  # Penalize long responses
+        helpfulness_bonus = 0.2 if "helpful" in text.lower() else 0.0
+        
+        return base_reward + length_penalty + helpfulness_bonus
+
+# Use custom reward model
+trainer = PPOTrainer(config, reward_model=CustomRewardModel())
+```
+
+#### Monitoring Training
+```python
+def training_callback(epoch: int, metrics: Dict):
+    print(f"Epoch {epoch}:")
+    print(f"  Policy Loss: {metrics['policy_loss']:.4f}")
+    print(f"  Value Loss: {metrics['value_loss']:.4f}")
+    print(f"  KL Divergence: {metrics['kl_div']:.4f}")
+    print(f"  Average Reward: {metrics['avg_reward']:.4f}")
+
+# Train with monitoring
+trainer.train(prompts, num_epochs=10, callbacks=[training_callback])
+```
 
 ## 📄 License
 
