@@ -2,20 +2,19 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![MLX](https://img.shields.io/badge/MLX-0.2.0+-green.svg)](https://ml-explore.github.io/mlx/)
 [![PPO](https://img.shields.io/badge/PPO-Implemented-orange.svg)](https://arxiv.org/abs/1707.06347)
 
-A production-ready implementation of Proximal Policy Optimization (PPO) for language model fine-tuning using Apple's MLX framework. This project provides a modular, scalable architecture for training language models with human feedback through reinforcement learning.
+A production-ready implementation of Proximal Policy Optimization (PPO) for language model fine-tuning. This project provides a modular, scalable architecture for training language models with human feedback through reinforcement learning.
 
 ## 🚀 Quick Start
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/mlx-ppo-language-finetuning.git
-cd mlx-ppo-language-finetuning
+git clone https://github.com/RoshBeed/MLX-Week5-PPO.git
+cd MLX-Week5-PPO
 
 # Install dependencies
-pip install -r requirements.txt
+uv sync
 
 # Run a quick demo
 python main.py
@@ -38,7 +37,6 @@ python main.py
 This project implements a complete PPO training pipeline for language models, featuring:
 
 - **Modular Architecture**: Clean separation of concerns with dedicated components
-- **MLX Integration**: Leverages Apple's MLX for efficient training on Apple Silicon
 - **Production Ready**: Comprehensive error handling, logging, and monitoring
 - **Extensible Design**: Easy to add new models, reward functions, and training strategies
 - **Research Friendly**: Supports experimentation with different PPO variants
@@ -86,10 +84,10 @@ This project implements a complete PPO training pipeline for language models, fe
 │                    └─────────────┘                              │
 │                             │                                   │
 │                             ▼                                   │
-│  ┌─────────────┐    ┌─────────────┐                             │
-│  │   Policy    │◀───│   Model     │                             │
-│  │   Update    │    │  Training   │                             │
-│  └─────────────┘    └─────────────┘                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐          |
+│  │   Policy    │◀───│   Model     │───▶│   Value     │          |
+│  │   Update    │    │  Training   │    │   Update    │          |
+│  └─────────────┘    └─────────────┘    └─────────────┘          |
 │                                                                 │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -145,7 +143,6 @@ ppo_trainer/
 ### Prerequisites
 
 - Python 3.8 or higher
-- Apple Silicon Mac (M1/M2/M3) or compatible MLX environment
 - 16GB+ RAM recommended
 - 50GB+ free disk space for model storage
 
@@ -153,24 +150,19 @@ ppo_trainer/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-org/mlx-ppo-language-finetuning.git
-   cd mlx-ppo-language-finetuning
+   git clone https://github.com/RoshBeed/MLX-Week5-PPO.git
+   cd MLX-Week5-PPO
    ```
 
 2. **Create virtual environment**
    ```bash
    python -m venv .venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   source .venv/bin/activate
    ```
 
 3. **Install dependencies**
    ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Verify installation**
-   ```bash
-   python -c "import mlx; print('MLX version:', mlx.__version__)"
+   uv sync
    ```
 
 ## 🚀 Usage
@@ -329,104 +321,7 @@ class RewardModel:
         """Compute reward for given text."""
 ```
 
-## 📖 Examples
 
-### Text Summarization
-
-```python
-from examples.summarization import SummarizationTrainer
-
-trainer = SummarizationTrainer()
-trainer.train_on_dataset("cnn_dailymail")
-```
-
-### Dialogue Generation
-
-```python
-from examples.dialogue import DialogueTrainer
-
-trainer = DialogueTrainer()
-trainer.train_on_dataset("conversation_ai")
-```
-
-### Code Generation
-
-```python
-from examples.code_generation import CodeGenerationTrainer
-
-trainer = CodeGenerationTrainer()
-trainer.train_on_dataset("code_search_net")
-```
-
-## 🧪 Testing
-
-Run the comprehensive test suite:
-
-```bash
-# Run all tests
-python -m pytest tests/
-
-# Run specific test categories
-python -m pytest tests/test_models.py
-python -m pytest tests/test_training.py
-python -m pytest tests/test_ppo_components.py
-
-# Run with coverage
-python -m pytest --cov=. tests/
-```
-
-## 📊 Performance
-
-### Training Metrics
-
-| Model Size | Batch Size | Training Time | Memory Usage | Reward Improvement |
-|------------|------------|---------------|--------------|-------------------|
-| 0.6B       | 4          | 2.5 hrs       | 8GB          | +15%              |
-| 1.3B       | 2          | 5.2 hrs       | 12GB         | +22%              |
-| 2.7B       | 1          | 12.1 hrs      | 16GB         | +28%              |
-
-### Hardware Requirements
-
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| RAM       | 8GB     | 16GB+       |
-| Storage   | 20GB    | 100GB+      |
-| GPU       | M1      | M2 Pro/Max  |
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
-
-### Development Setup
-
-```bash
-# Clone with submodules
-git clone --recursive https://github.com/your-org/mlx-ppo-language-finetuning.git
-
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Install pre-commit hooks
-pre-commit install
-```
-
-### Code Style
-
-We use:
-- **Black** for code formatting
-- **isort** for import sorting
-- **flake8** for linting
-- **mypy** for type checking
-
-```bash
-# Format code
-black .
-isort .
-
-# Lint code
-flake8 .
-mypy .
-```
 
 ## 📄 License
 
@@ -434,7 +329,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- **Apple MLX Team** for the MLX framework
 - **OpenAI** for the original PPO algorithm
 - **Hugging Face** for the transformers library
 - **Qwen Team** for the base language models
@@ -442,10 +336,10 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - **Documentation**: [docs/](docs/)
-- **Issues**: [GitHub Issues](https://github.com/your-org/mlx-ppo-language-finetuning/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/your-org/mlx-ppo-language-finetuning/discussions)
-- **Email**: support@your-org.com
+- **Issues**: [GitHub Issues](https://github.com/RoshBeed/MLX-Week5-PPO/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/RoshBeed/MLX-Week5-PPO/discussions)
+- **Email**: rosh.beed@roshbeed.com
 
 ---
 
-**Made with ❤️ by the MLX PPO Team**
+**Made with ❤️ by Rosh**
