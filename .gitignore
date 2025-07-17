@@ -1,0 +1,89 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# Pytest
+.cache
+
+# mypy
+.mypy_cache/
+.dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# VS Code
+.vscode/
+
+# Mac OS
+.DS_Store
+
+# Python profiling
+.prof
+
+# Logs
+*.log
+
+# Local environment variables
+.env
+.env.*
+
+# Lock files
+poetry.lock
+Pipfile.lock
+uv.lock
+
+# Ignore data files
+*.csv
+*.tsv
+*.xls
+*.xlsx
+*.parquet
+*.h5
+*.hdf5
+*.db
+*.sqlite
+*.pkl
+*.joblib
+
+# Ignore model weights
+*.pt
+*.pth
+*.ckpt
+*.onnx
+
+# Ignore large datasets
+/data/ 
