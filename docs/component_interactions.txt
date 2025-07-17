@@ -1,0 +1,123 @@
+Component Interactions and Data Flow
+=====================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           Component Interaction Map                         │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐                                                           │
+│  │   Config    │                                                           │
+│  │             │                                                           │
+│  │ • PPOConfig │                                                           │
+│  └─────────────┘                                                           │
+│        │                                                                   │
+│        ▼                                                                   │
+│  ┌─────────────┐                                                           │
+│  │ Base Setup  │                                                           │
+│  │             │                                                           │
+│  │ • Tokenizer │                                                           │
+│  │ • LoRA      │                                                           │
+│  │ • Models    │                                                           │
+│  └─────────────┘                                                           │
+│        │                                                                   │
+│        ▼                                                                   │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │   Models    │    │   Models    │    │   Models    │    │   Models    │  │
+│  │             │    │             │    │             │    │             │  │
+│  │ • SFT       │    │ • Policy    │    │ • Reward    │    │ • Value     │  │
+│  │   Model     │    │   Model     │    │   Model     │    │   Model     │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│        │                   │                   │                   │       │
+│        │                   │                   │                   │       │
+│        └───────────────────┼───────────────────┼───────────────────┘       │
+│                            │                   │                           │
+│                            ▼                   ▼                           │
+│  ┌─────────────────────────────────────────────────────────────────────┐   │
+│  │                    PPO Trainer (Orchestrator)                      │   │
+│  │                                                                     │   │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐ │   │
+│  │  │ Generator   │  │Reward Comp. │  │Value Adder  │  │Model Trainer│ │   │
+│  │  │             │  │             │  │             │  │             │ │   │
+│  │  │ • Sequences │  │ • Rewards   │  │ • Values    │  │ • Policy    │ │   │
+│  │  │ • SA Pairs  │  │ • Scoring   │  │ • Predict.  │  │   Updates   │ │   │
+│  │  │ • Logprobs  │  │ • Batch     │  │ • Batching  │  │ • Value     │ │   │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘ │   │
+│  └─────────────────────────────────────────────────────────────────────┘   │
+│                            │                   │                           │
+│                            ▼                   ▼                           │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │   Token     │    │  Reward/KL  │    │  Advantage  │    │ Experience  │  │
+│  │Attribution  │    │             │    │             │    │   Buffer    │  │
+│  │             │    │ • KL Div    │    │ • TD Error  │    │             │  │
+│  │ • Extractor │    │ • Reward    │    │ • GAE       │    │ • Storage   │  │
+│  │ • SA Builder│    │   Adjuster  │    │ • Returns   │    │ • Batching  │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│        │                   │                   │                   │       │
+│        │                   │                   │                   │       │
+│        └───────────────────┼───────────────────┼───────────────────┘       │
+│                            │                   │                           │
+│                            ▼                   ▼                           │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │  Training   │    │  Training   │    │  Training   │    │  Training   │  │
+│  │             │    │             │    │             │    │             │  │
+│  │ • Policy    │    │ • Policy    │    │ • Value     │    │ • Value     │  │
+│  │   Ratio     │    │   Loss      │    │   Loss      │    │   Loss      │  │
+│  │ • PPO-Clip  │    │ • MSE       │    │ • MSE       │    │ • MSE       │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Data Flow Between Components:
+=============================
+
+1. CONFIG → BASE_SETUP
+   • PPOConfig provides hyperparameters
+   • BaseSetup initializes tokenizer, LoRA, and base models
+
+2. BASE_SETUP → MODELS
+   • Creates SFT, Policy, Reward, and Value models
+   • All models share the same base architecture with LoRA
+
+3. MODELS → PPO_TRAINER
+   • Models are passed to PPO trainer components
+   • Each component handles specific model interactions
+
+4. PPO_TRAINER → COMPONENTS
+   • Generator: Uses Policy and SFT models
+   • RewardComputer: Uses Reward model
+   • ValueAdder: Uses Value model
+   • ModelTrainer: Updates Policy and Value models
+
+5. COMPONENTS → TRAINING
+   • Token attribution provides SA pairs
+   • Reward/KL provides adjusted rewards
+   • Advantage provides GAE advantages
+   • Training components compute losses
+
+Key Interactions:
+=================
+
+• Generator ↔ SFT Model: For reference logprobs
+• Generator ↔ Policy Model: For generation and policy logprobs
+• RewardComputer ↔ Reward Model: For sequence scoring
+• ValueAdder ↔ Value Model: For state value predictions
+• ModelTrainer ↔ Policy Model: For policy updates
+• ModelTrainer ↔ Value Model: For value function updates
+
+Data Types Passed:
+==================
+
+• Prompts: List[str] → Generator
+• Generated texts: List[str] → RewardComputer
+• SA pairs: List[Dict] → All components
+• Rewards: List[float] → RewardAdjuster
+• Advantages: List[float] → ModelTrainer
+• Losses: float → PPO Trainer
+
+Error Handling:
+===============
+
+• Device management: All components use consistent device handling
+• Batch processing: Components handle variable batch sizes
+• Memory management: Efficient tensor operations
+• Gradient flow: Proper backpropagation through all components 

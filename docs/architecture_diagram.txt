@@ -1,0 +1,54 @@
+PPO Implementation Architecture
+================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                           PPO Training Pipeline                             │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │   Config    │    │ Base Setup  │    │   Models    │    │ Token Attr. │  │
+│  │             │    │             │    │             │    │             │  │
+│  │ • PPOConfig │    │ • Tokenizer │    │ • SFT Model │    │ • Extractor │  │
+│  │ • Hyperparams│   │ • LoRA Setup│    │ • Policy    │    │ • SA Builder│  │
+│  │ • Training  │    │ • Model Base│    │ • Reward    │    │ • Pairs     │  │
+│  │   Settings  │    │             │    │ • Value     │    │             │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│                                                                             │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
+│  │  Reward/KL  │    │  Advantage  │    │ Experience  │    │  Training   │  │
+│  │             │    │             │    │   Buffer    │    │             │  │
+│  │ • KL Div    │    │ • TD Error  │    │             │    │ • Policy    │  │
+│  │ • Reward    │    │ • GAE       │    │ • Storage   │    │   Ratio     │  │
+│  │   Adjuster  │    │ • Returns   │    │ • Batching  │    │ • Losses    │  │
+│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
+│                                                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────┐  │
+│  │                        PPO Trainer (Orchestrator)                      │  │
+│  │                                                                         │  │
+│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │  │
+│  │  │ Generator   │  │Reward Comp. │  │Value Adder  │  │Model Trainer│    │  │
+│  │  │             │  │             │  │             │  │             │    │  │
+│  │  │ • Sequences │  │ • Rewards   │  │ • Values    │  │ • Policy    │    │  │
+│  │  │ • SA Pairs  │  │ • Scoring   │  │ • Predict.  │  │   Updates   │    │  │
+│  │  │ • Logprobs  │  │ • Batch     │  │ • Batching  │  │ • Value     │    │  │
+│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │  │
+│  └─────────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Data Flow:
+----------
+Input Prompts → Generate Sequences → Extract SA Pairs → Compute KL → Get Rewards
+     ↓              ↓                    ↓               ↓           ↓
+Adjust Rewards → Add Values → Compute TD → GAE → Returns → Train Models
+     ↓              ↓           ↓         ↓       ↓         ↓
+Updated Policy & Value Models ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ←
+
+Key Features:
+-------------
+• Modular Design: Each component is independent and testable
+• LoRA Fine-tuning: Efficient parameter-efficient fine-tuning
+• Token-level Optimization: Granular control over generation
+• KL Divergence Control: Prevents catastrophic forgetting
+• GAE Advantages: Stable advantage estimation
+• PPO-Clip Loss: Conservative policy updates 
