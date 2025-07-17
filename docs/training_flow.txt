@@ -1,119 +1,147 @@
-PPO Training Flow - Step by Step
-=================================
+MLX PPO Training Flow - Step-by-Step Process
+============================================
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              PPO Training Loop                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  STEP 1: Generate Sequences                                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Prompts                                                      │   │
-│  │ Process: Policy model generates token sequences                     │   │
-│  │ Output: Generated texts + token-level logprobs                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 2: Extract (State, Action) Pairs                                   │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Generated sequences                                           │   │
-│  │ Process: For each token t:                                           │   │
-│  │   • State = prompt + tokens[0:t-1]                                  │   │
-│  │   • Action = token[t]                                               │   │
-│  │   • Policy logprob = π_policy(action|state)                        │   │
-│  │   • Reference logprob = π_sft(action|state)                        │   │
-│  │ Output: List of (s, a, logprob_policy, logprob_ref) tuples          │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 3: Compute KL Divergence                                           │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Policy and reference logprobs                                │   │
-│  │ Process: KL_t = logprob_policy - logprob_ref                        │   │
-│  │ Output: KL divergence for each token                                │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 4: Get Sequence Rewards                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Full sequences (prompt + generated)                          │   │
-│  │ Process: Reward model scores each sequence                          │   │
-│  │ Output: Scalar reward for each sequence                             │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 5: Adjust Rewards with KL Penalty                                 │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Sequence rewards + KL divergences                            │   │
-│  │ Process: adjusted_reward = reward - β × KL                          │   │
-│  │ Output: KL-adjusted rewards for each token                          │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 6: Add Value Predictions                                          │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: States (prompt + partial sequences)                          │   │
-│  │ Process: Value model predicts V(s) for each state                   │   │
-│  │ Output: Value predictions for each state                            │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 7: Compute TD Errors                                             │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Rewards, values, next values                                 │   │
-│  │ Process: δ_t = r_t + γV(s_{t+1}) - V(s_t)                          │   │
-│  │ Output: TD errors for each timestep                                 │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 8: Compute GAE Advantages                                         │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: TD errors                                                    │   │
-│  │ Process: A_t = Σ(γλ)^i δ_{t+i} (backwards from T to t)             │   │
-│  │ Output: GAE advantages for each timestep                            │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 9: Calculate Returns (Reward-to-go)                               │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: Advantages + values                                          │   │
-│  │ Process: G_t = A_t + V(s_t)                                         │   │
-│  │ Output: Return targets for value function                           │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 10: Train Value Model                                            │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: States + return targets                                      │   │
-│  │ Process: MSE loss between V(s) and G                                │   │
-│  │ Output: Updated value function                                      │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                    ↓                                       │
-│  STEP 11: Train Policy Model (PPO-Clip)                                │
-│  ┌─────────────────────────────────────────────────────────────────────┐   │
-│  │ Input: States, actions, old logprobs, advantages                   │   │
-│  │ Process:                                                           │   │
-│  │   • Compute new logprobs π_new(action|state)                      │   │
-│  │   • Calculate ratio = exp(logprob_new - logprob_old)               │   │
-│  │   • PPO-clip loss = min(ratio×A, clip(ratio,1±ε)×A)               │   │
-│  │ Output: Updated policy function                                     │   │
-│  └─────────────────────────────────────────────────────────────────────┘   │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              PPO Training Loop                                  │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  STEP 1: INITIALIZATION                                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Load pre-trained base model (Qwen3-0.6B)                                │ │
+│  │ • Initialize LoRA adapters for all models                                  │ │
+│  │ • Set up tokenizer and generation parameters                               │ │
+│  │ • Configure PPO hyperparameters (γ=0.99, λ=0.95, ε=0.2)                   │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 2: DATA PREPARATION                                                       │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Load training prompts from dataset                                       │ │
+│  │ • Preprocess and tokenize input sequences                                  │ │
+│  │ • Initialize experience buffer for batch processing                        │ │
+│  │ • Set up reward model and value function                                   │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 3: SEQUENCE GENERATION                                                    │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Generate text sequences using current policy model                       │ │
+│  │ • Extract token-level state-action pairs                                   │ │
+│  │ • Compute log probabilities for each action                                │ │
+│  │ • Record reference model log probabilities                                 │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 4: REWARD COMPUTATION                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Evaluate generated sequences with reward model                           │ │
+│  │ • Compute KL divergence between policy and reference                      │ │
+│  │ • Apply KL penalty: adjusted_reward = reward - β × KL                     │ │
+│  │ • Normalize rewards across batch for stability                             │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 5: VALUE ESTIMATION                                                        │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Predict state values using value function                                │ │
+│  │ • Compute temporal difference errors                                       │ │
+│  │ • Calculate Generalized Advantage Estimation (GAE)                        │ │
+│  │ • Determine reward-to-go targets for value learning                       │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 6: EXPERIENCE BUFFERING                                                   │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Store state-action pairs with computed values                           │ │
+│  │ • Buffer advantages, returns, and log probabilities                       │ │
+│  │ • Implement efficient batch sampling strategies                           │ │
+│  │ • Manage memory usage and buffer overflow                                 │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 7: POLICY UPDATE (PPO-CLIP)                                              │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Compute policy ratio: π_new(a|s) / π_old(a|s)                           │ │
+│  │ • Apply PPO-clip loss: L = min(ratio × A, clip(ratio, 1±ε) × A)           │ │
+│  │ • Update policy parameters via gradient descent                            │ │
+│  │ • Monitor policy entropy and exploration                                   │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 8: VALUE FUNCTION UPDATE                                                  │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Compute MSE loss between predicted and target values                    │ │
+│  │ • Update value function parameters                                         │ │
+│  │ • Validate value predictions on validation set                            │ │
+│  │ • Track value function accuracy and convergence                           │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 9: MONITORING & LOGGING                                                   │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Record training metrics (losses, rewards, KL divergence)                │ │
+│  │ • Monitor policy and value function convergence                           │ │
+│  │ • Log generated samples and quality metrics                               │ │
+│  │ • Save model checkpoints at regular intervals                             │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  STEP 10: CONVERGENCE CHECK                                                     │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │ • Evaluate model performance on validation set                            │ │
+│  │ • Check for policy collapse or reward degradation                         │ │
+│  │ • Assess KL divergence stability                                          │ │
+│  │ • Determine if training should continue or stop                           │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                             │
+│                                    ▼                                             │
+│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
+│  │                    NEXT ITERATION OR CONVERGENCE                          │ │
+│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
-Key Mathematical Formulas:
-==========================
+Key Mathematical Components:
+============================
 
-1. KL Divergence: KL_t = log π_policy(a_t|s_t) - log π_sft(a_t|s_t)
+1. PPO-CLIP LOSS:
+   L(θ) = E[min(r_t(θ) × A_t, clip(r_t(θ), 1-ε, 1+ε) × A_t)]
+   where r_t(θ) = π_θ(a_t|s_t) / π_θ_old(a_t|s_t)
 
-2. Adjusted Reward: r'_t = R - β × KL_t
+2. GENERALIZED ADVANTAGE ESTIMATION (GAE):
+   A_t = δ_t + γλδ_{t+1} + (γλ)²δ_{t+2} + ...
+   where δ_t = r_t + γV(s_{t+1}) - V(s_t)
 
-3. TD Error: δ_t = r'_t + γV(s_{t+1}) - V(s_t)
+3. KL DIVERGENCE PENALTY:
+   L_KL = β × KL(π_θ || π_ref)
+   adjusted_reward = reward - L_KL
 
-4. GAE Advantage: A_t = Σ_{i=0}^{T-t} (γλ)^i δ_{t+i}
+4. VALUE FUNCTION LOSS:
+   L_V = MSE(V_θ(s_t), V_target(s_t))
+   where V_target(s_t) = A_t + V_θ_old(s_t)
 
-5. Return: G_t = A_t + V(s_t)
+Training Hyperparameters:
+=========================
 
-6. Policy Ratio: ρ_t = π_new(a_t|s_t) / π_old(a_t|s_t)
+• Learning Rate: 1e-5 (policy), 1e-4 (value)
+• Batch Size: 4-32 (depending on model size)
+• KL Coefficient (β): 0.1-0.2
+• PPO Clip Epsilon (ε): 0.2
+• Discount Factor (γ): 0.99
+• GAE Lambda (λ): 0.95
+• Max Gradient Norm: 1.0
+• Value Loss Coefficient: 0.5
 
-7. PPO-Clip Loss: L = -E[min(ρ_t A_t, clip(ρ_t, 1-ε, 1+ε) A_t)]
+Monitoring Metrics:
+===================
 
-8. Value Loss: L_v = MSE(V(s_t), G_t)
+• Policy Loss: PPO-clip loss value
+• Value Loss: MSE between predicted and target values
+• KL Divergence: Distance from reference model
+• Average Reward: Mean reward across batch
+• Policy Entropy: Exploration measure
+• Value Accuracy: Value function prediction quality
+• Generation Quality: Human evaluation scores
 
-Hyperparameters:
-================
-• γ (gamma): Discount factor (default: 0.99)
-• λ (lambda): GAE parameter (default: 0.95)
-• β (beta): KL penalty coefficient (default: 0.1)
-• ε (epsilon): PPO clip parameter (default: 0.2)
-• Learning rates: Policy (1e-5), Value (1e-4) 
+This training flow ensures stable, efficient PPO training with proper monitoring
+and convergence checking for production-ready language model fine-tuning. 

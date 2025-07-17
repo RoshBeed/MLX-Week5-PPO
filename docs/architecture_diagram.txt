@@ -1,54 +1,127 @@
-PPO Implementation Architecture
-================================
+MLX PPO Language Model Fine-tuning - System Architecture
+================================================================
 
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           PPO Training Pipeline                             │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │   Config    │    │ Base Setup  │    │   Models    │    │ Token Attr. │  │
-│  │             │    │             │    │             │    │             │  │
-│  │ • PPOConfig │    │ • Tokenizer │    │ • SFT Model │    │ • Extractor │  │
-│  │ • Hyperparams│   │ • LoRA Setup│    │ • Policy    │    │ • SA Builder│  │
-│  │ • Training  │    │ • Model Base│    │ • Reward    │    │ • Pairs     │  │
-│  │   Settings  │    │             │    │ • Value     │    │             │  │
-│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
-│                                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐    ┌─────────────┐  │
-│  │  Reward/KL  │    │  Advantage  │    │ Experience  │    │  Training   │  │
-│  │             │    │             │    │   Buffer    │    │             │  │
-│  │ • KL Div    │    │ • TD Error  │    │             │    │ • Policy    │  │
-│  │ • Reward    │    │ • GAE       │    │ • Storage   │    │   Ratio     │  │
-│  │   Adjuster  │    │ • Returns   │    │ • Batching  │    │ • Losses    │  │
-│  └─────────────┘    └─────────────┘    └─────────────┘    └─────────────┘  │
-│                                                                             │
-│  ┌─────────────────────────────────────────────────────────────────────────┐  │
-│  │                        PPO Trainer (Orchestrator)                      │  │
-│  │                                                                         │  │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │  │
-│  │  │ Generator   │  │Reward Comp. │  │Value Adder  │  │Model Trainer│    │  │
-│  │  │             │  │             │  │             │  │             │    │  │
-│  │  │ • Sequences │  │ • Rewards   │  │ • Values    │  │ • Policy    │    │  │
-│  │  │ • SA Pairs  │  │ • Scoring   │  │ • Predict.  │  │   Updates   │    │  │
-│  │  │ • Logprobs  │  │ • Batch     │  │ • Batching  │  │ • Value     │    │  │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘    │  │
-│  └─────────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              PPO Training Pipeline                              │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                 │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐             │
+│  │   Input Data    │    │   Generation    │    │   Output Text   │             │
+│  │                 │    │                 │    │                 │             │
+│  │ • Prompts       │───▶│ • Policy Model  │───▶│ • Generated     │             │
+│  │ • Datasets      │    │ • Token-by-Token│    │   Sequences     │             │
+│  │ • Human Feedback│    │ • Sampling      │    │ • State-Action  │             │
+│  │                 │    │ • Logprobs      │    │   Pairs         │             │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘             │
+│                                 │                           │                   │
+│                                 ▼                           ▼                   │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐             │
+│  │   Evaluation    │    │   Analysis      │    │   Prediction    │             │
+│  │                 │    │                 │    │                 │             │
+│  │ • Reward Model  │◀───│ • Token         │◀───│ • Value Model   │             │
+│  │ • Human Scores  │    │   Attribution   │    │ • State Values  │             │
+│  │ • Quality Metrics│   │ • KL Divergence │    │ • Future Rewards│             │
+│  │                 │    │ • Advantage Est.│    │                 │             │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘             │
+│         │                       │                       │                       │
+│         ▼                       ▼                       ▼                       │
+│  ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐             │
+│  │   Reward        │    │   Advantage     │    │   Value         │             │
+│  │   Computation   │    │   Estimation    │    │   Learning      │             │
+│  │                 │    │                 │    │                 │             │
+│  │ • Sequence      │    │ • TD Errors     │    │ • MSE Loss      │             │
+│  │   Rewards       │    │ • GAE           │    │ • Value Targets │             │
+│  │ • KL Penalty    │    │ • Returns       │    │ • Gradient      │             │
+│  │ • Adjustments   │    │ • Bootstrapping │    │   Updates       │             │
+│  └─────────────────┘    └─────────────────┘    └─────────────────┘             │
+│         │                       │                       │                       │
+│         └───────────────────────┼───────────────────────┘                       │
+│                                 ▼                                               │
+│                        ┌─────────────────┐                                      │
+│                        │   Experience    │                                      │
+│                        │     Buffer      │                                      │
+│                        │                 │                                      │
+│                        │ • State-Action  │                                      │
+│                        │   Pairs         │                                      │
+│                        │ • Advantages    │                                      │
+│                        │ • Returns       │                                      │
+│                        │ • Logprobs      │                                      │
+│                        └─────────────────┘                                      │
+│                                 │                                               │
+│                                 ▼                                               │
+│  ┌─────────────────┐    ┌─────────────────┐                                      │
+│  │   Policy        │◀───│   Model         │                                      │
+│  │   Update        │    │   Training      │                                      │
+│  │                 │    │                 │                                      │
+│  │ • PPO-Clip Loss │    │ • Batch         │                                      │
+│  │ • Policy Ratio  │    │   Processing    │                                      │
+│  │ • Gradient      │    │ • Loss          │                                      │
+│  │   Updates       │    │   Computation   │                                      │
+│  │ • Parameter     │    │ • Optimization  │                                      │
+│  │   Updates       │    │ • Monitoring    │                                      │
+│  └─────────────────┘    └─────────────────┘                                      │
+│                                                                                 │
+└─────────────────────────────────────────────────────────────────────────────────┘
 
-Data Flow:
-----------
-Input Prompts → Generate Sequences → Extract SA Pairs → Compute KL → Get Rewards
-     ↓              ↓                    ↓               ↓           ↓
-Adjust Rewards → Add Values → Compute TD → GAE → Returns → Train Models
-     ↓              ↓           ↓         ↓       ↓         ↓
-Updated Policy & Value Models ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ← ←
+Component Details:
+==================
+
+1. INPUT DATA LAYER
+   - Prompts: Text inputs for generation
+   - Datasets: Training and evaluation data
+   - Human Feedback: Reward signals and preferences
+
+2. GENERATION LAYER
+   - Policy Model: Current policy for text generation
+   - Token-by-Token: Sequential generation process
+   - Sampling: Exploration strategies (temperature, top-k, top-p)
+   - Logprobs: Action probabilities for each token
+
+3. ANALYSIS LAYER
+   - Token Attribution: State-action pair extraction
+   - KL Divergence: Distance from reference model
+   - Advantage Estimation: Quality of actions relative to baseline
+
+4. EVALUATION LAYER
+   - Reward Model: Learned reward function
+   - Human Scores: Direct human feedback
+   - Quality Metrics: Automated evaluation scores
+
+5. COMPUTATION LAYER
+   - Reward Computation: Final reward signals
+   - Advantage Estimation: GAE and TD error computation
+   - Value Learning: Value function updates
+
+6. BUFFER LAYER
+   - Experience Buffer: Storage for training data
+   - Batch Management: Efficient data handling
+   - Memory Management: Resource optimization
+
+7. TRAINING LAYER
+   - Model Training: PPO and value function updates
+   - Loss Computation: Policy and value losses
+   - Optimization: Gradient descent and parameter updates
 
 Key Features:
--------------
-• Modular Design: Each component is independent and testable
-• LoRA Fine-tuning: Efficient parameter-efficient fine-tuning
-• Token-level Optimization: Granular control over generation
-• KL Divergence Control: Prevents catastrophic forgetting
-• GAE Advantages: Stable advantage estimation
-• PPO-Clip Loss: Conservative policy updates 
+=============
+
+• MODULAR DESIGN: Each component is independently testable and replaceable
+• SCALABLE ARCHITECTURE: Supports different model sizes and batch configurations
+• EFFICIENT MEMORY: Optimized buffer management for large-scale training
+• FLEXIBLE REWARDS: Support for multiple reward functions and human feedback
+• STABLE TRAINING: PPO-clip and KL penalty prevent policy collapse
+• MONITORING: Comprehensive logging and metrics tracking
+
+Data Flow:
+==========
+
+1. Prompts → Policy Model → Generated Text
+2. Generated Text → Token Attribution → State-Action Pairs
+3. State-Action Pairs → Reward/Value Models → Signals
+4. Signals → Advantage Computation → Training Targets
+5. Training Targets → Experience Buffer → Batch Data
+6. Batch Data → Model Training → Updated Models
+7. Updated Models → Next Generation Cycle
+
+This architecture enables efficient, stable, and scalable PPO training for language models
+with human feedback, supporting both research and production deployments. 

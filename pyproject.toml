@@ -1,17 +1,199 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "mlx-week5-ppo"
+name = "mlx-ppo-language-finetuning"
 version = "0.1.0"
-description = "Add your description here"
+description = "Production-ready PPO implementation for language model fine-tuning using Apple's MLX framework"
 readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "datasets>=4.0.0",
-    "iprogress>=0.4",
-    "ipykernel>=6.29.5",
-    "ipython>=9.4.0",
-    "numpy>=2.3.1",
-    "peft>=0.16.0",
-    "torch>=2.7.1",
-    "tqdm>=4.67.1",
-    "transformers>=4.53.2",
+license = {text = "MIT"}
+authors = [
+    {name = "MLX PPO Team", email = "team@your-org.com"}
 ]
+maintainers = [
+    {name = "MLX PPO Team", email = "team@your-org.com"}
+]
+keywords = ["mlx", "ppo", "reinforcement-learning", "language-models", "fine-tuning", "apple-silicon"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.8"
+dependencies = [
+    "mlx>=0.2.0",
+    "mlx.nn>=0.2.0",
+    "mlx.optimizers>=0.2.0",
+    "transformers>=4.36.0",
+    "tokenizers>=0.15.0",
+    "peft>=0.7.0",
+    "accelerate>=0.25.0",
+    "datasets>=2.14.0",
+    "numpy>=1.24.0",
+    "scipy>=1.11.0",
+    "pandas>=2.0.0",
+    "torch>=2.0.0",
+    "torchvision>=0.15.0",
+    "tqdm>=4.65.0",
+    "wandb>=0.15.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+    "rich>=13.0.0",
+    "loguru>=0.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "flake8>=6.0.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.3.0",
+]
+docs = [
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.3.0",
+    "myst-parser>=2.0.0",
+]
+gpu = [
+    "cupy-cuda12x>=12.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/mlx-ppo-language-finetuning"
+Documentation = "https://mlx-ppo-language-finetuning.readthedocs.io"
+Repository = "https://github.com/your-org/mlx-ppo-language-finetuning.git"
+"Bug Tracker" = "https://github.com/your-org/mlx-ppo-language-finetuning/issues"
+"Discussions" = "https://github.com/your-org/mlx-ppo-language-finetuning/discussions"
+
+[project.scripts]
+mlx-ppo = "mlx_ppo.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["mlx_ppo*"]
+exclude = ["tests*", "docs*", "examples*"]
+
+[tool.setuptools.package-data]
+"mlx_ppo" = ["*.yaml", "*.yml", "*.json"]
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["mlx_ppo"]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "mlx.*",
+    "transformers.*",
+    "peft.*",
+    "datasets.*",
+    "wandb.*",
+]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+]
+
+[tool.coverage.run]
+source = ["mlx_ppo"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/venv/*",
+    "*/.venv/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.ruff]
+target-version = "py38"
+line-length = 88
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "C4", # flake8-comprehensions
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501",  # line too long, handled by black
+    "B008",  # do not perform function calls in argument defaults
+    "C901",  # too complex
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["B011"]
