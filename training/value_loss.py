@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 class ValueLoss:
     """Computes value function loss"""
-    
+ 
     @staticmethod
     def mse_loss(predicted_values: torch.Tensor, 
                 target_values: torch.Tensor) -> torch.Tensor:
