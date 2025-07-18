@@ -245,107 +245,143 @@ Handles training of policy and value models.
 - Policy model: Maximizes PPO-clipped objective with advantages
 
 ### PPO Training Flow
-
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│    Prompts      │───▶│ generate_sequences│───▶│ add_kl_to_sa_pairs│───▶│ compute_rewards │
-└─────────────────┘    │                 │    └─────────────────┘    └─────────────────┘
-                       │ • PolicyModel   │              │                       │
-                       │ • SFTModel      │              │                       │
-                       │ • Tokenizer     │              │                       │
-                       │ • Both models   │              │                       │
-                       │   used during   │              │                       │
-                       │   generation    │              │                       │
-                       └─────────────────┘              │                       │
-                                │                       │                       │
-                                ▼                       ▼                       ▼
-                       ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-                       │ State-Action    │    │ sa_pairs with   │    │ Rewards         │
-                       │ Pairs with:     │    │ KL divergence   │    │ Sequence-level  │
-                       │ • Policy logprobs│    │ added           │    │                 │
-                       │ • SFT logprobs  │    │                 │    │                 │
-                       └─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │                       │                       │
-                                └───────────────────────┼───────────────────────┘
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │ adjust_rewards_with_kl│
-                                               │ • Combines KL   │
-                                               │   and rewards   │
-                                               └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │ add_values_to_sa_pairs│
-                                               │ • ValueModel    │
-                                               └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │ compute_td_errors│
-                                               │ • TD errors     │
-                                               └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │ compute_gae_advantages│
-                                               │ • GAE advantages│
-                                               └─────────────────┘
-                                                        │
-                                                        ▼
-                                               ┌─────────────────┐
-                                               │ add_reward_to_go│
-                                               │ • Returns       │
-                                               └─────────────────┘
-                                                        │
-                                                        ▼
-                       ┌─────────────────┐    ┌─────────────────┐
-                       │ train_value_model│    │ train_policy_model│
-                       │ • ValueModel    │    │ • PolicyModel   │
-                       │ • MSE Loss      │    │ • PPO Loss      │
-                       └─────────────────┘    └─────────────────┘
+┌───────────────────────────────────────────────────────────────────────────────┐
+│                          PPO Training Pipeline                                │
+├───────────────────────────────────────────────────────────────────────────────┤
+│                                                                               │
+│  ┌────────────────────┐                                                       │
+│  │    Input Data      │                                                       │
+│  │────────────────────│                                                       │
+│  │ • Prompts          │                                                       │
+│  │ • Datasets         │                                                       │
+│  │ • Human Feedback   │                                                       │
+│  └────────────────────┘                                                       │
+│         │                                                                     │
+│         ▼                                                                     │
+│  ┌─────────────────────────────────────────────────────────────────-────────┐ │
+│  │                   Generation & Token Attribution                         │ │
+│  │                                                                          │ │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                   │ │
+│  │  │ Policy Model  │ │   SFT Model   │ │   Tokenizer   │                   │ │
+│  │  │───────────────│ │───────────────│ │───────────────│                   │ │
+│  │  │ • generate()  │ │ • Ref Logprobs│ │ • Tokenize    │                   │ │
+│  │  │ • Logprobs    │ │ • KL Baseline │ │ • Decode      │                   │ │
+│  │  │               │ │               │ │ • SA Extract  │                   │ │
+│  │  └───────────────┘ └───────────────┘ └───────────────┘                   │ │
+│  │         │                  │                    │                        │ │
+│  │         └──────────────────┴────────────────────┘                        │ │
+│  │                            ▼                                             │ │
+│  │             ┌────────────────────────────┐                               │ │
+│  │             │    generate_sequences()    │                               │ │
+│  │             │────────────────────────────│                               │ │
+│  │             │ • Input: List[str]         │                               │ │
+│  │             │ • Output: SA pairs, text   │                               │ │
+│  │             └--------────────────────────┘                               │ │
+│  └───────────────────────────────────────────────────────────────-──────────┘ │
+│         │                                     │                               │
+│         ▼                                     ▼                               │
+│  ┌────────────────────┐       ┌─────────────────────────────┐                 │
+│  │   Reward Model     │       │               KL Divergence │                 │
+│  │────────────────────│       │─────────────────────────────│                 │
+│  │ • compute_rewards()│       │ • add_kl_to_sa_pairs()      │                 │
+│  │ • Output: floats   │       │ • Output: SA pairs w/ KL    │                 │
+│  └────────────────────┘       └─────────────────────────────┘                 │
+│         │                                     │                               │
+│         └───────────────────────┬─────────────┘                               │
+│                                 ▼                                             │
+│  ┌───────────────────────────────────────────────────────────────────────-──┐ │
+│  │                      Reward Adjustment Pipeline                          │ │
+│  │                                                                          │ │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                   │ │
+│  │  │  Adjuster     │ │ Enhanced SA   │ │ Value Model   │                   │ │
+│  │  │───────────────│ │───────────────│ │───────────────│                   │ │
+│  │  │ • adjust_kl() │ │ • Adjusted    │ │ • add_values()│                   │ │
+│  │  │               │ │   Rewards     │ │               │                   │ │
+│  │  └───────────────┘ └───────────────┘ └───────────────┘                   │ │
+│  └─────────┼────────────────┼────────────────────┼──────────────────────────┘ │
+│            │                │                    │                            │
+│            └────────────────┴────────────────────┘                            │
+│                             ▼                                                 │
+│               ┌──────────────────────────────┐                                │
+│               │  Advantage Computation       │                                │
+│               │──────────────────────────────│                                │
+│               │ • TD Errors                  │                                │
+│               │ • GAE Advantages             │                                │
+│               │ • Reward-to-go               │                                │
+│               └──────────────────────────────┘                                │
+│                            │                                                  │
+│                            ▼                                                  │
+│  ┌───────────────────────────────────────────────────────────────-──────────┐ │
+│  │                          Model Training                                  │ │
+│  │                                                                          │ │
+│  │  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐                   │ │
+│  │  │ Value Trainer │ │ Policy Trainer│ │ Experience Buf│                   │ │
+│  │  │───────────────│ │───────────────│ │───────────────│                   │ │
+│  │  │ • MSE Loss    │ │ • PPO Loss    │ │ • SA Batching │                   │ │
+│  │  │ • Updates     │ │ • Grad Step   │ │               │                   │ │
+│  │  └───────────────┘ └───────────────┘ └───────────────┘                   │ │
+│  │         │                  │                 │                           │ │
+│  │         └──────────────────┼──----───────────┘                           │ │
+│  │                            ▼                                             │ │
+│  │                   ┌─────────────────┐                                    │ │
+│  │                   │ Updated Models  │                                    │ │
+│  │                   │─--──────────────│                                    │ │
+│  │                   │ • Policy Model  │                                    │ │
+│  │                   │ • Value Model   │                                    │ │
+│  │                   │ • Ready for     │                                    │ │
+│  │                   │   Next Step     │                                    │ │
+│  │                   └─────────────────┘                                    │ │
+│  └──────────────────────────────────────────────────────────────────────────┘ │ 
+└───────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Step-by-Step Process (from ppo_step method):**
+Component Details:
+==================
 
-1. **generate_sequences(prompts)**: `SequenceGenerator` uses both `PolicyModel` and `SFTModel` to:
-   - Generate text sequences using policy model
-   - Extract state-action pairs for each token
-   - Get policy log probabilities from policy model
-   - Get reference log probabilities from SFT model (during generation)
-   - Returns: `sa_pairs` (with both policy and SFT logprobs) and `generated_texts`
+1. INPUT DATA LAYER
+   - Prompts: Text inputs for generation
+   - Datasets: Training and evaluation data
+   - Human Feedback: Reward signals and preferences
 
-2. **add_kl_to_sa_pairs(sa_pairs)**: `KLDivergence` computes KL divergence between policy and SFT log probabilities per token
-   - Input: `sa_pairs` (already containing both policy and SFT logprobs)
-   - Output: `sa_pairs` with KL divergence added
+2. GENERATION & TOKEN ATTRIBUTION LAYER
+   - Policy Model: Current policy for text generation
+   - SFT Model: Reference model for KL divergence
+   - Tokenizer: Text tokenization and state-action extraction
+   - generate_sequences(): Creates SA pairs and generated text
 
-3. **compute_rewards(prompts, generated_texts)**: `RewardComputer` uses `RewardModel` to compute sequence-level rewards
-   - Input: `prompts` and `generated_texts`
-   - Output: `rewards` (sequence-level)
+3. KL DIVERGENCE & REWARDS LAYER 
+   - KL Divergence: Distance from reference model (add_kl_to_sa_pairs)
+   - Reward Model: Learned reward function (compute_rewards)
+   - Reward Adjuster: KL penalty application (adjust_rewards_with_kl)
 
-4. **adjust_rewards_with_kl(sa_pairs, rewards, kl_coef)**: `RewardAdjuster` combines KL divergence and rewards
-   - Input: `sa_pairs` (with KL), `rewards`, `kl_coef`
-   - Output: `sa_pairs` with adjusted rewards
+4. ADVANTAGE & VALUE COMPUTATION LAYER
+   - Value Model: State value predictions (add_values_to_sa_pairs)
+   - TD Error: Temporal difference error computation (compute_td_errors)
+   - GAE Advantage: Generalized advantage estimation (compute_gae_advantages)
+   - Return Calculator: Reward-to-go computation (add_reward_to_go)
 
-5. **add_values_to_sa_pairs(sa_pairs)**: `ValueAdder` uses `ValueModel` to predict values for each state
-   - Input: `sa_pairs`
-   - Output: `sa_pairs` with values added
+5. MODEL TRAINING LAYER
+   - Value Model Trainer: MSE loss and value updates (train_value_model)
+   - Policy Model Trainer: PPO-clip loss and policy updates (train_policy_model)
+   - Experience Buffer: Training data storage
 
-6. **compute_td_errors(sa_pairs, gamma)**: `TDError` computes temporal difference errors
-   - Input: `sa_pairs` (with values and rewards)
-   - Output: `sa_pairs` with TD errors
 
-7. **compute_gae_advantages(sa_pairs, gamma, lam)**: `GAEAdvantage` calculates Generalized Advantage Estimation
-   - Input: `sa_pairs` (with TD errors)
-   - Output: `sa_pairs` with advantages
+Data Flow:
+==========
 
-8. **add_reward_to_go(sa_pairs)**: `ReturnCalculator` computes reward-to-go for value model targets
-   - Input: `sa_pairs` (with advantages)
-   - Output: `sa_pairs` with returns
+1. Prompts → generate_sequences() → State-Action Pairs + Generated Text
+2. Generated Text → compute_rewards() → Rewards
+3. State-Action Pairs → add_kl_to_sa_pairs() → Enhanced SA Pairs
+4. Enhanced SA Pairs + Rewards → adjust_rewards_with_kl() → Adjusted SA Pairs
+5. Adjusted SA Pairs → add_values_to_sa_pairs() → SA Pairs with Values
+6. SA Pairs with Values → compute_td_errors() + compute_gae_advantages() + add_reward_to_go() → Training Targets
+7. Training Targets → train_value_model() + train_policy_model() → Updated Models
+8. Updated Models → Next Generation Cycle (Feedback Loop)
 
-9. **train_value_model(sa_pairs)**: `ModelTrainer` updates value model using MSE loss with reward-to-go targets
+This architecture enables efficient, stable, and scalable PPO training for language models
+with human feedback, supporting both research and production deployments. 
 
-10. **train_policy_model(sa_pairs)**: `ModelTrainer` updates policy model using PPO-clipped objective with advantages
 
 ## 🚀 Running the Project
 
